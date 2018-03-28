@@ -66,7 +66,6 @@ READ:
 	s.bufferLock.Unlock()
 
 	if n > 0 {
-		s.sess.returnTokens(n)
 		return n, nil
 	} else if atomic.LoadInt32(&s.rstflag) == 1 {
 		_ = s.Close()
@@ -212,15 +211,6 @@ func (s *Stream) pushBytes(p []byte) {
 	s.bufferLock.Lock()
 	s.buffer.Write(p)
 	s.bufferLock.Unlock()
-}
-
-// recycleTokens transform remaining bytes to tokens(will truncate buffer)
-func (s *Stream) recycleTokens() (n int) {
-	s.bufferLock.Lock()
-	n = s.buffer.Len()
-	s.buffer.Reset()
-	s.bufferLock.Unlock()
-	return
 }
 
 // split large byte buffer into smaller frames, reference only

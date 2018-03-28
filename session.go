@@ -38,9 +38,6 @@ type Session struct {
 	nextStreamID     uint32 // next stream identifier
 	nextStreamIDLock sync.Mutex
 
-	bucket       int32         // token bucket
-	bucketNotify chan struct{} // used for waiting for tokens
-
 	streams    map[uint32]*Stream // all streams in this session
 	streamLock sync.Mutex         // locks streams
 
@@ -64,8 +61,6 @@ func newSession(config *Config, conn io.ReadWriteCloser, client bool) *Session {
 	s.config = config
 	s.streams = make(map[uint32]*Stream)
 	s.chAccepts = make(chan *Stream, defaultAcceptBacklog)
-	s.bucket = int32(config.MaxReceiveBuffer)
-	s.bucketNotify = make(chan struct{}, 1)
 	s.writes = make(chan writeRequest)
 
 	if client {
@@ -148,16 +143,7 @@ func (s *Session) Close() (err error) {
 			s.streams[k].sessionClose()
 		}
 		s.streamLock.Unlock()
-		s.notifyBucket()
 		return s.conn.Close()
-	}
-}
-
-// notifyBucket notifies recvLoop that bucket is available
-func (s *Session) notifyBucket() {
-	select {
-	case s.bucketNotify <- struct{}{}:
-	default:
 	}
 }
 
@@ -191,20 +177,8 @@ func (s *Session) SetDeadline(t time.Time) error {
 // notify the session that a stream has closed
 func (s *Session) streamClosed(sid uint32) {
 	s.streamLock.Lock()
-	if n := s.streams[sid].recycleTokens(); n > 0 { // return remaining tokens to the bucket
-		if atomic.AddInt32(&s.bucket, int32(n)) > 0 {
-			s.notifyBucket()
-		}
-	}
 	delete(s.streams, sid)
 	s.streamLock.Unlock()
-}
-
-// returnTokens is called by stream to return token after read
-func (s *Session) returnTokens(n int) {
-	if atomic.AddInt32(&s.bucket, int32(n)) > 0 {
-		s.notifyBucket()
-	}
 }
 
 // session read a frame from underlying connection
@@ -235,10 +209,6 @@ func (s *Session) readFrame(buffer []byte) (f Frame, err error) {
 func (s *Session) recvLoop() {
 	buffer := make([]byte, (1<<16)+headerSize)
 	for {
-		for atomic.LoadInt32(&s.bucket) <= 0 && !s.IsClosed() {
-			<-s.bucketNotify
-		}
-
 		if f, err := s.readFrame(buffer); err == nil {
 			atomic.StoreInt32(&s.dataReady, 1)
 
@@ -265,7 +235,6 @@ func (s *Session) recvLoop() {
 			case cmdPSH:
 				s.streamLock.Lock()
 				if stream, ok := s.streams[f.sid]; ok {
-					atomic.AddInt32(&s.bucket, -int32(len(f.data)))
 					stream.pushBytes(f.data)
 					stream.notifyReadEvent()
 				}
@@ -290,7 +259,6 @@ func (s *Session) keepalive() {
 		select {
 		case <-tickerPing.C:
 			s.writeFrame(newFrame(cmdNOP, 0))
-			s.notifyBucket() // force a signal to the recvLoop
 		case <-tickerTimeout.C:
 			if !atomic.CompareAndSwapInt32(&s.dataReady, 1, 0) {
 				s.Close()
