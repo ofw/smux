@@ -43,7 +43,7 @@ func TestConfig(t *testing.T) {
 	}
 
 	config = DefaultConfig()
-	config.MaxFrameSize = 65536
+	config.MaxFrameSize = 1<<32 + 1
 	err = VerifyConfig(config)
 	t.Log(err)
 	if err == nil {

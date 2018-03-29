@@ -5,8 +5,12 @@ import (
 	"io"
 	"time"
 
+	"math"
+
 	"github.com/pkg/errors"
 )
+
+const maxFrameSize = math.MaxUint32
 
 // Config is used to tune the Smux session
 type Config struct {
@@ -47,8 +51,8 @@ func VerifyConfig(config *Config) error {
 	if config.MaxFrameSize <= 0 {
 		return errors.New("max frame size must be positive")
 	}
-	if config.MaxFrameSize > 65535 {
-		return errors.New("max frame size must not be larger than 65535")
+	if config.MaxFrameSize > maxFrameSize {
+		return fmt.Errorf("max frame size must not be larger than %v", maxFrameSize)
 	}
 	if config.MaxReceiveBuffer <= 0 {
 		return errors.New("max receive buffer must be positive")

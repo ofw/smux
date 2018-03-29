@@ -207,7 +207,7 @@ func (s *Session) readFrame(buffer []byte) (f Frame, err error) {
 
 // recvLoop keeps on reading from underlying connection if tokens are available
 func (s *Session) recvLoop() {
-	buffer := make([]byte, (1<<16)+headerSize)
+	buffer := make([]byte, s.config.MaxFrameSize+headerSize)
 	for {
 		if f, err := s.readFrame(buffer); err == nil {
 			atomic.StoreInt32(&s.dataReady, 1)
