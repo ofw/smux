@@ -271,7 +271,7 @@ func (s *Session) keepalive() {
 }
 
 func (s *Session) sendLoop() {
-	buf := make([]byte, (1<<16)+headerSize)
+	buf := make([]byte, s.config.MaxFrameSize+headerSize)
 	for {
 		select {
 		case <-s.die:
@@ -280,7 +280,7 @@ func (s *Session) sendLoop() {
 			buf[0] = request.frame.ver
 			buf[1] = request.frame.cmd
 			binary.LittleEndian.PutUint16(buf[2:], uint16(len(request.frame.data)))
-			binary.LittleEndian.PutUint32(buf[4:], request.frame.sid)
+			binary.LittleEndian.PutUint32(buf[6:], request.frame.sid)
 			copy(buf[headerSize:], request.frame.data)
 			n, err := s.conn.Write(buf[:headerSize+len(request.frame.data)])
 

@@ -5,12 +5,10 @@ import (
 	"io"
 	"time"
 
-	"math"
-
 	"github.com/pkg/errors"
 )
 
-const maxFrameSize = math.MaxUint32
+const maxFrameSize = 1024 * 1024 * 10 // 10 MB
 
 // Config is used to tune the Smux session
 type Config struct {
