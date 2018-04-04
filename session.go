@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"fmt"
 )
 
 const (
@@ -197,6 +198,9 @@ func (s *Session) readFrame(buffer []byte) (f Frame, err error) {
 	f.cmd = dec.Cmd()
 	f.sid = dec.StreamID()
 	if length := dec.Length(); length > 0 {
+		if int(length+headerSize) > len(buffer) {
+			return f, fmt.Errorf("frame size %v exceeds max frame size %v", length, len(buffer)-headerSize)
+		}
 		if _, err := io.ReadFull(s.conn, buffer[headerSize:headerSize+length]); err != nil {
 			return f, errors.Wrap(err, "readFrame")
 		}
